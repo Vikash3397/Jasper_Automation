@@ -2,7 +2,40 @@
 
 Generate JasperReports (`.jrxml`) templates from functional specifications. Layout and output file names come from the spec; technical conventions come from project rules and optional sample templates.
 
-## Setup
+## Pipeline flow
+
+```mermaid
+flowchart TB
+  subgraph author["Spec authoring"]
+    DOCX["functional_spec/*.docx<br/>(Word)"]
+    DOCX -->|"docx_spec_to_md.py"| MD["functional_spec/*.md"]
+  end
+
+  subgraph resolve["Name resolution"]
+    MD --> PARSE["parse_spec_outputs.py"]
+    PARSE --> NAMES["Resolved .jrxml names<br/>e.g. {base}_main, {base}_detail"]
+  end
+
+  subgraph style["House style (reference only)"]
+    RULES["jasper-rules.md"]
+    SAMPLES["sample_template/*.jrxml"]
+  end
+
+  subgraph generate["Template generation"]
+    MD --> GEN["gen_national_invoice.py<br/>or /generate-jasper-template"]
+    NAMES --> GEN
+    RULES --> GEN
+    SAMPLES --> GEN
+    GEN --> OUT["output/*.jrxml"]
+  end
+
+  subgraph verify["Verify & deploy"]
+    OUT --> VAL["validate_jrxml.py"]
+    VAL -->|OK| COMPILE["Compile detail → .jasper"]
+    COMPILE --> IREPORT["Preview in iReport 5.6.0"]
+  end
+```
+
 
 ```powershell
 python -m venv .venv
