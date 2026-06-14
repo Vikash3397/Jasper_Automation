@@ -22,7 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from parse_spec_outputs import DEFAULT_SPEC, derive_outputs  # noqa: E402
+from parse_spec_outputs import derive_outputs  # noqa: E402
+from spec_context import resolve_active_spec  # noqa: E402
 
 import uuid
 
@@ -592,15 +593,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "spec",
         nargs="?",
-        default=str(DEFAULT_SPEC),
-        help="Functional spec .md path",
+        default=None,
+        help="Functional spec .md or .docx (default: auto-discover under functional_spec/)",
+    )
+    parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Do not regenerate .md from .docx even when stale",
     )
     args = parser.parse_args(argv)
 
-    spec_path = Path(args.spec)
-    if not spec_path.is_file():
-        print(f"Spec not found: {spec_path}", file=sys.stderr)
+    try:
+        active = resolve_active_spec(args.spec, sync=not args.no_sync)
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
         return 1
+
+    spec_path = active.md
 
     resolved = derive_outputs(spec_path)
     roles = _output_by_role(resolved["outputs"])

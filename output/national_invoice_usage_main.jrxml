@@ -6,7 +6,7 @@
   Optional parameters: P_CONTACT_USER (default "N/A" for F2 Contact No)
   Engine-provided (do not declare): REPORT_CONNECTION, REPORT_LOCALE, etc.
   Design assumptions (A1-A15):
-  A1: Detail view VW_DOCUMENT_TRANS_DETAIL (detail subreport query)
+  A1: Detail subreport query uses VW_DOCUMENT_TRANS_SUMMARY (per spec; not VW_DOCUMENT_TRANS_DETAIL)
   A2: Main filter DETAIL_TYPE='SERVICE'
   A3: Invoice Terms = "Net " + PAYMENT_DUE_DAYS + " days"
   A4: P_CONTACT_USER optional, default N/A
@@ -16,7 +16,7 @@
   A8: TRAFFIC_PERIOD as-is from view
   A9: Single CURRENCY field
   A10: Origination TBD when null/empty/DUMMY (detail subreport)
-  A11: Detail filter NET_AMOUNT<>0 (detail subreport)
+  A11: Detail filter TOTAL_AMOUNT<>0 (per spec detail query)
   A12: Bank Name=FRN_BANK_NAME
   A13: OPR_CONTACT_NO fallback FRN_TELEPHONE
   A14: pageFooter main only

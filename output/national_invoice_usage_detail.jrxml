@@ -5,8 +5,8 @@
   Required parameters: P_TRANS_ID, P_LOGO
   Engine-provided (do not declare): REPORT_CONNECTION via connectionExpression only
   Design assumptions (A1-A15):
-  A1: Detail view VW_DOCUMENT_TRANS_DETAIL
-  A2: Main filter DETAIL_TYPE='SERVICE' (main report; not applied here)
+  A1: Query uses VW_DOCUMENT_TRANS_SUMMARY (per spec; not sample VW_DOCUMENT_TRANS_DETAIL)
+  A2: Main filter DETAIL_TYPE='SERVICE' (main report only; not applied on detail)
   A3: Invoice Terms = "Net " + PAYMENT_DUE_DAYS + " days" (main report)
   A4: P_CONTACT_USER optional, default N/A (main report F2)
   A5: Special Deal printWhen when DATA_TYPE VBR or SPECIAL
@@ -15,7 +15,7 @@
   A8: TRAFFIC_PERIOD as-is from view
   A9: Single CURRENCY field
   A10: Origination TBD when null/empty/DUMMY
-  A11: Detail filter NET_AMOUNT<>0
+  A11: Detail filter TOTAL_AMOUNT<>0 (per spec detail query)
   A12: Bank Name=FRN_BANK_NAME (main report F1)
   A13: OPR_CONTACT_NO fallback FRN_TELEPHONE (main report H2)
   A14: pageFooter main only (no pageFooter on this subreport)
@@ -41,9 +41,17 @@
 	<parameter name="P_TRANS_ID" class="java.lang.String"/>
 	<parameter name="P_LOGO" class="java.lang.String"/>
 	<queryString><![CDATA[SELECT
+TRANS.FRN_NAME,
+TRANS.FRN_TAX_REG_NO,
+TRANS.OPR_NAME,
+TRANS.DOCUMENT_NUMBER,
+TRANS.BILLING_PERIOD,
+TRANS.DOCUMENT_DATE,
+TRANS.PAYMENT_DUE_DATE,
+TRANS.CURRENCY,
+TRANS.SERVICE_NAME,
 TRANS.TRAFFIC_PERIOD,
 TRANS.DATA_TYPE,
-TRANS.SERVICE_NAME,
 TRANS.RATING_COMPONENT,
 TRANS.ORIGINATION,
 TRANS.DESTINATION,
@@ -53,23 +61,22 @@ TRANS.RATE_UNIT,
 TRANS.RATE,
 TRANS.NET_AMOUNT,
 TRANS.TOTAL_AMOUNT,
-TRANS.DETAIL_TYPE,
-TRANS.PRODUCT_GROUP,
-TRANS.FRN_NAME,
-TRANS.FRN_TAX_REG_NO,
-TRANS.OPR_NAME,
-TRANS.DOCUMENT_NUMBER,
-TRANS.BILLING_PERIOD,
-TRANS.DOCUMENT_DATE,
-TRANS.PAYMENT_DUE_DATE,
-TRANS.CURRENCY
-FROM VW_DOCUMENT_TRANS_DETAIL TRANS
+TRANS.PRODUCT_GROUP
+FROM VW_DOCUMENT_TRANS_SUMMARY TRANS
 WHERE TRANS.ID = $P{P_TRANS_ID}
-AND TRANS.NET_AMOUNT <> 0
-ORDER BY TRANS.TRAFFIC_PERIOD, TRANS.DATA_TYPE, TRANS.PRODUCT_GROUP, TRANS.SERVICE_NAME]]></queryString>
+AND TRANS.TOTAL_AMOUNT <> 0
+ORDER BY TRANS.TRAFFIC_PERIOD, TRANS.DATA_TYPE, TRANS.SERVICE_NAME]]></queryString>
+	<field name="FRN_NAME" class="java.lang.String"/>
+	<field name="FRN_TAX_REG_NO" class="java.lang.String"/>
+	<field name="OPR_NAME" class="java.lang.String"/>
+	<field name="DOCUMENT_NUMBER" class="java.lang.String"/>
+	<field name="BILLING_PERIOD" class="java.lang.String"/>
+	<field name="DOCUMENT_DATE" class="java.lang.String"/>
+	<field name="PAYMENT_DUE_DATE" class="java.lang.String"/>
+	<field name="CURRENCY" class="java.lang.String"/>
+	<field name="SERVICE_NAME" class="java.lang.String"/>
 	<field name="TRAFFIC_PERIOD" class="java.lang.String"/>
 	<field name="DATA_TYPE" class="java.lang.String"/>
-	<field name="SERVICE_NAME" class="java.lang.String"/>
 	<field name="RATING_COMPONENT" class="java.lang.String"/>
 	<field name="ORIGINATION" class="java.lang.String"/>
 	<field name="DESTINATION" class="java.lang.String"/>
@@ -79,16 +86,7 @@ ORDER BY TRANS.TRAFFIC_PERIOD, TRANS.DATA_TYPE, TRANS.PRODUCT_GROUP, TRANS.SERVI
 	<field name="RATE" class="java.math.BigDecimal"/>
 	<field name="NET_AMOUNT" class="java.math.BigDecimal"/>
 	<field name="TOTAL_AMOUNT" class="java.math.BigDecimal"/>
-	<field name="DETAIL_TYPE" class="java.lang.String"/>
 	<field name="PRODUCT_GROUP" class="java.lang.String"/>
-	<field name="FRN_NAME" class="java.lang.String"/>
-	<field name="FRN_TAX_REG_NO" class="java.lang.String"/>
-	<field name="OPR_NAME" class="java.lang.String"/>
-	<field name="DOCUMENT_NUMBER" class="java.lang.String"/>
-	<field name="BILLING_PERIOD" class="java.lang.String"/>
-	<field name="DOCUMENT_DATE" class="java.lang.String"/>
-	<field name="PAYMENT_DUE_DATE" class="java.lang.String"/>
-	<field name="CURRENCY" class="java.lang.String"/>
 	<variable name="DETAIL_NET_AMOUNT" class="java.lang.Double" resetType="Group" resetGroup="Data Type" calculation="Sum">
 		<variableExpression><![CDATA[$F{NET_AMOUNT}]]></variableExpression>
 	</variable>

@@ -1,0 +1,49 @@
+{
+  "$schema": "Pipeline format markers for functional spec .docx → .md parsing. Edit this file when the Word template structure changes; Python scripts load it at runtime.",
+  "version": 1,
+  "docx_discovery": {
+    "prefer_patterns": [
+      "*_Functional_Template.docx",
+      "*_Functional_Technical_Spec.docx"
+    ]
+  },
+  "formatting_section": {
+    "heading_patterns": [
+      "(?i)general\\s+instruction"
+    ],
+    "stop_on_markdown_heading": true,
+    "stop_on_bold_bullet_section": true,
+    "stop_table_first_cell_patterns": [
+      "(?i)^report\\s*$",
+      "(?i)^page\\s*$"
+    ]
+  },
+  "outputs": {
+    "template_title_patterns": [
+      "\\*\\*([^*]+Template)\\*\\*",
+      "^#\\s+(.+Template)\\s*$"
+    ],
+    "spec_stem_suffixes": [
+      "_Functional_Template",
+      "_Functional",
+      "_Template"
+    ],
+    "page_table": {
+      "first_column_headers": ["page"],
+      "min_columns": 2
+    },
+    "explicit_output_table": {
+      "file_column_headers": ["file"],
+      "name_column_headers": ["jasper", "name"],
+      "role_column_headers": ["role"],
+      "table_must_contain": ["jasper", "role"],
+      "file_extension": ".jrxml"
+    },
+    "page_role_suffix": {
+      "cover page": "main",
+      "cover": "main",
+      "detail page": "detail",
+      "detail": "detail"
+    }
+  }
+}

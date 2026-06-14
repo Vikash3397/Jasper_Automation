@@ -29,7 +29,10 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_IN = ROOT / "functional_spec" / "Invoice_Functional_Template.docx"
+if str(ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(ROOT / "scripts"))
+
+from spec_context import find_spec_docx  # noqa: E402
 
 # Word style name -> markdown heading level (0 = #, 1 = ##, ...)
 HEADING_STYLES: dict[str, int] = {
@@ -367,19 +370,6 @@ def _default_out(docx_path: Path) -> Path:
     return docx_path.with_suffix(".md")
 
 
-def _find_docx(spec_dir: Path) -> Path | None:
-    for pattern in ("*_Functional_Template.docx", "*_Functional_Technical_Spec.docx"):
-        candidates = sorted(
-            spec_dir.glob(pattern),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        if candidates:
-            return candidates[0]
-    docs = sorted(spec_dir.glob("*.docx"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return docs[0] if docs else None
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Convert functional spec .docx to .md for agents/pipelines."
@@ -388,7 +378,7 @@ def main() -> int:
         "input",
         nargs="?",
         type=Path,
-        help="Input .docx (default: Invoice_Functional_Template.docx or latest *_Functional_*.docx in functional_spec/)",
+        help="Input .docx (default: auto-discover via functional_spec/spec_format.json)",
     )
     parser.add_argument(
         "output",
@@ -435,18 +425,15 @@ def main() -> int:
 
     docx_in = args.input
     if docx_in is None:
-        if DEFAULT_IN.exists():
-            docx_in = DEFAULT_IN
-        else:
-            spec_dir = ROOT / "functional_spec"
-            found = _find_docx(spec_dir)
-            if found is None:
-                print(
-                    "No input .docx. Pass a path or add a file under functional_spec/",
-                    file=sys.stderr,
-                )
-                return 1
-            docx_in = found
+        spec_dir = ROOT / "functional_spec"
+        found = find_spec_docx(spec_dir)
+        if found is None:
+            print(
+                "No input .docx. Pass a path or add a file under functional_spec/",
+                file=sys.stderr,
+            )
+            return 1
+        docx_in = found
 
     docx_in = docx_in.resolve()
     if not docx_in.exists():
