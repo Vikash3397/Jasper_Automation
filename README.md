@@ -8,7 +8,7 @@ Generate JasperReports (`.jrxml`) templates from functional specifications. Layo
 flowchart TB
   subgraph author["Spec authoring"]
     DOCX["functional_spec/*.docx<br/>(Word)"]
-    DOCX -->|"docx_spec_to_md.py"| MD["functional_spec/*.md"]
+    DOCX -->|"jasper-spec-converter<br/>(docx_spec_to_md.py)"| MD["functional_spec/*.md"]
   end
 
   subgraph resolve["Name resolution"]
@@ -21,9 +21,14 @@ flowchart TB
     SAMPLES["sample_template/*.jrxml"]
   end
 
+  subgraph design["Verify & design (agent)"]
+    MD --> ARCH["jasper-spec-architect<br/>(verify spec + layout design)"]
+    NAMES --> ARCH
+    ARCH --> DESIGN["Layout design<br/>(bands, groups, fields)"]
+  end
+
   subgraph generate["Template generation"]
-    MD --> GEN["gen_national_invoice.py<br/>or /generate-jasper-template"]
-    NAMES --> GEN
+    DESIGN --> GEN["jasper-report-author<br/>(gen_reference_sample.py = frozen example only)"]
     RULES --> GEN
     SAMPLES --> GEN
     GEN --> OUT["output/*.jrxml"]
@@ -46,12 +51,15 @@ python -m venv .venv
 
 | Path | Purpose |
 |------|---------|
-| `functional_spec/` | Word (`.docx`) and Markdown (`.md`) functional specs — see [functional_spec/README.md](functional_spec/README.md) |
-| `sample_template/` | Reference JRXML for naming, styles, and types only (not layout) |
+| `functional_spec/` | Word (`.docx`) and Markdown (`.md`) functional specs |
+| `sample_template/` | Reference JRXML (`sample_invoice_main.jrxml`, `sample_invoice_detail.jrxml`) for naming, styles, and types only (not layout) |
 | `output/` | Generated `.jrxml` files (names derived from the active spec) |
 | `scripts/` | Spec conversion, output-name resolution, generation, validation |
 | `.cursor/rules/jasper-rules.md` | Binding JRXML conventions |
-| `.cursor/commands/generate-jasper-template.md` | Cursor command workflow |
+| `.cursor/commands/generate-jasper-template.md` | Cursor command: orchestrates the converter -> architect -> author sequence |
+| `.cursor/agents/jasper-spec-converter.md` | Agent: Word `.docx` -> Markdown `.md` conversion |
+| `.cursor/agents/jasper-spec-architect.md` | Agent: verify spec + design layout (read-only) |
+| `.cursor/agents/jasper-report-author.md` | Agent: author JRXML from the layout design |
 
 ## Generate templates
 
@@ -81,13 +89,27 @@ Resolution order (see `.cursor/rules/jasper-rules.md` §6):
 2. Template title + **Page** table → `{base}_main.jrxml`, `{base}_detail.jrxml`, etc.
 3. Spec filename fallback (strip `_Functional_Template`, convert to `snake_case`)
 
-### 3. Generate JRXML
+### 2b. Extract formatting rules
+
+Formatting checklists are **never hardcoded** in agents. They are derived from the spec's **General Instruction(s)** section:
 
 ```powershell
-.venv\Scripts\python.exe scripts\gen_national_invoice.py functional_spec\Invoice_Functional_Template.md
+.venv\Scripts\python.exe scripts\parse_spec_formatting.py functional_spec\<SPEC>.md
 ```
 
-Writes spec-derived filenames to `output/`. The main report references the detail subreport as `{detail_stem}.jasper` under `TEMPLATE_FILE_DIRECTORY`.
+Use the JSON `rules` array in the architect layout design and when mapping patterns/expressions in JRXML. If `found` is false, the Word source may need a "General Instruction" heading.
+
+### 3. Verify the spec, design the layout, and author JRXML
+
+For any real spec, use the agent pipeline so the layout tracks the spec. The **`/generate-jasper-template`** command runs the **`jasper-spec-architect`** agent (verifies the spec, emits a reviewable layout design) and then the **`jasper-report-author`** agent (writes the JRXML). The main report references the detail subreport as `{detail_stem}.jasper` under `TEMPLATE_FILE_DIRECTORY`.
+
+For a deterministic copy of the **National Invoice Usage** example only (layout is hardcoded — not spec-driven), run:
+
+```powershell
+.venv\Scripts\python.exe scripts\gen_reference_sample.py functional_spec\Invoice_Functional_Template.md
+```
+
+Writes spec-derived filenames to `output/`. Do not use this script for other specs.
 
 ### 4. Validate
 
@@ -95,7 +117,17 @@ Writes spec-derived filenames to `output/`. The main report references the detai
 .venv\Scripts\python.exe scripts\validate_jrxml.py output\
 ```
 
-Checks XML well-formedness, duplicate declarations, built-in parameters, layout attributes on `<reportElement>`, UUIDs, band order, and single-band sections.
+Checks XML well-formedness, duplicate declarations, built-in parameters, layout attributes on `<reportElement>`, UUIDs, band order, single-band sections, `$F`/`$V`/`$P` expression-to-declaration consistency, and subreport wiring.
+
+### 5. Compile to `.jasper`
+
+`.jasper` files are build artifacts (git-ignored) — regenerate them before previewing. Compile the detail subreport (and any others) with:
+
+```powershell
+.venv\Scripts\python.exe scripts\compile_jasper.py output\
+```
+
+Requires [JasperStarter](https://jasperstarter.sourceforge.io/) on `PATH`, via `--jasperstarter <path>`, or the `JASPERSTARTER` env var. Without it, compile inside iReport 5.6.0 / Jaspersoft Studio (right-click the `.jrxml` -> Compile Report).
 
 ## Source of truth
 
@@ -106,4 +138,4 @@ Checks XML well-formedness, duplicate declarations, built-in parameters, layout 
 
 ## iReport
 
-Templates target **iReport 5.6.0**. After generation, compile the detail `.jrxml` to `.jasper` before previewing the main report.
+Templates target **iReport 5.6.0**. After generation, compile the detail `.jrxml` to `.jasper` (see step 5, `scripts/compile_jasper.py`) before previewing the main report.

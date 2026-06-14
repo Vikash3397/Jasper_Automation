@@ -31,6 +31,17 @@ BUILTIN_PARAMETERS = frozenset(
 LAYOUT_PARENT_TAGS = ("textField", "staticText", "image", "line", "rectangle", "subreport")
 LAYOUT_ATTRS = ("x", "y", "width", "height", "uuid", "style", "key", "positionType")
 
+# Variables JasperReports/iReport injects automatically (never declared).
+BUILTIN_VARIABLES = frozenset(
+    {
+        "PAGE_NUMBER",
+        "COLUMN_NUMBER",
+        "REPORT_COUNT",
+        "PAGE_COUNT",
+        "COLUMN_COUNT",
+    }
+)
+
 UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
 )
@@ -132,6 +143,63 @@ def validate_file(path: Path) -> list[str]:
                     "schema allows only one; merge into a single band"
                 )
 
+    errors.extend(_check_expression_consistency(path, text))
+    errors.extend(_check_subreport_wiring(path, text))
+
+    return errors
+
+
+def _check_expression_consistency(path: Path, text: str) -> list[str]:
+    """Every $F/$V/$P reference must resolve to a declaration (or a built-in)."""
+    errors: list[str] = []
+
+    declared_fields = set(re.findall(r'<field\s+name="([^"]+)"', text))
+    declared_params = set(re.findall(r'<parameter\s+name="([^"]+)"', text))
+    declared_vars = set(re.findall(r'<variable\s+name="([^"]+)"', text))
+    groups = re.findall(r'<group\s+name="([^"]+)"', text)
+    # JasperReports exposes a built-in "<group>_COUNT" variable per group.
+    group_counts = {f"{g}_COUNT" for g in groups}
+
+    used_fields = set(re.findall(r"\$F\{([^}]+)\}", text))
+    used_params = set(re.findall(r"\$P\{([^}]+)\}", text))
+    used_vars = set(re.findall(r"\$V\{([^}]+)\}", text))
+
+    for name in sorted(used_fields - declared_fields):
+        errors.append(
+            f"{path}: field $F{{{name}}} used but not declared as <field name=\"{name}\">"
+        )
+    for name in sorted(used_params - declared_params - BUILTIN_PARAMETERS):
+        errors.append(
+            f"{path}: parameter $P{{{name}}} used but not declared "
+            f"(declare <parameter> or use a built-in)"
+        )
+    for name in sorted(used_vars - declared_vars - BUILTIN_VARIABLES - group_counts):
+        errors.append(
+            f"{path}: variable $V{{{name}}} used but not declared as <variable name=\"{name}\">"
+        )
+
+    return errors
+
+
+def _check_subreport_wiring(path: Path, text: str) -> list[str]:
+    """Subreport expressions must resolve a compiled .jasper via a path parameter."""
+    errors: list[str] = []
+    for m in re.finditer(
+        r"<subreportExpression>\s*(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?\s*</subreportExpression>",
+        text,
+        re.DOTALL,
+    ):
+        expr = m.group(1).strip()
+        if ".jasper" not in expr:
+            errors.append(
+                f"{path}: subreportExpression must reference a compiled '.jasper' file "
+                f"(got: {expr[:80]})"
+            )
+        elif "$P{" not in expr and "$V{" not in expr and "$F{" not in expr:
+            errors.append(
+                f"{path}: subreportExpression hardcodes a path — use "
+                f"$P{{TEMPLATE_FILE_DIRECTORY}} + \"<detail_stem>.jasper\""
+            )
     return errors
 
 

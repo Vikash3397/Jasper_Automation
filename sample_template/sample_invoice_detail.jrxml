@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HOUSE STYLE REFERENCE - detail subreport (compiled to .jasper and loaded by the main report).
+  Reference ONLY for technical conventions: single P_TRANS_ID parameter passed from the host,
+  SNAKE_CASE fields, BigDecimal money/volume types, Double sum variables reset by group,
+  #,##0 / #,##0.00 number patterns, dd-MMM-yyyy dates, and "Alternate Row Colour" striping.
+  DO NOT copy the band/group layout or column set - layout comes from the functional spec.
+  Detail subreports must NOT declare REPORT_CONNECTION (engine-provided).
+-->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="sample_invoice_detail" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="201d2bb2-0d1a-4484-ba9a-488ce7c37f94">
+	<property name="ireport.encoding" value="UTF-8"/>
+	<import value="net.sf.jasperreports.engine.*"/>
+	<style name="Title" isDefault="false" fontName="Calibri" fontSize="10" isBold="true"/>
+	<style name="Label" isDefault="false" fontName="Calibri" fontSize="8" isBold="true"/>
+	<style name="Data" isDefault="false" fontName="Calibri" fontSize="8"/>
+	<style name="Alternate Row Colour" mode="Opaque" backcolor="#F0F0F0">
+		<conditionalStyle>
+			<conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+			<style mode="Opaque" backcolor="#F0F0F0"/>
+		</conditionalStyle>
+	</style>
+	<parameter name="P_TRANS_ID" class="java.lang.String"/>
+	<parameter name="P_LOGO" class="java.lang.String"/>
+	<queryString><![CDATA[SELECT
+TRANS.TRAFFIC_PERIOD,
+TRANS.SERVICE_NAME,
+TRANS.RATING_COMPONENT,
+TRANS.ORIGINATION,
+TRANS.DESTINATION,
+TRANS.CALL_COUNT,
+TRANS.USAGE,
+TRANS.RATE_UNIT,
+TRANS.RATE,
+TRANS.NET_AMOUNT,
+TRANS.DETAIL_TYPE,
+TRANS.PRODUCT_GROUP
+FROM VW_DOCUMENT_TRANS_DETAIL TRANS
+WHERE TRANS.ID = $P{P_TRANS_ID}
+AND TRANS.NET_AMOUNT <> 0
+ORDER BY TRANS.TRAFFIC_PERIOD, TRANS.PRODUCT_GROUP, TRANS.SERVICE_NAME]]></queryString>
+	<field name="TRAFFIC_PERIOD" class="java.lang.String"/>
+	<field name="SERVICE_NAME" class="java.lang.String"/>
+	<field name="RATING_COMPONENT" class="java.lang.String"/>
+	<field name="ORIGINATION" class="java.lang.String"/>
+	<field name="DESTINATION" class="java.lang.String"/>
+	<field name="CALL_COUNT" class="java.math.BigDecimal"/>
+	<field name="USAGE" class="java.math.BigDecimal"/>
+	<field name="RATE_UNIT" class="java.lang.String"/>
+	<field name="RATE" class="java.math.BigDecimal"/>
+	<field name="NET_AMOUNT" class="java.math.BigDecimal"/>
+	<field name="DETAIL_TYPE" class="java.lang.String"/>
+	<field name="PRODUCT_GROUP" class="java.lang.String"/>
+	<variable name="DETAIL_NET_AMOUNT" class="java.lang.Double" resetType="Group" resetGroup="Product Group" calculation="Sum">
+		<variableExpression><![CDATA[$F{NET_AMOUNT}]]></variableExpression>
+	</variable>
+	<variable name="DETAIL_CALL_COUNT" class="java.lang.Double" resetType="Group" resetGroup="Product Group" calculation="Sum">
+		<variableExpression><![CDATA[$F{CALL_COUNT}]]></variableExpression>
+	</variable>
+	<group name="Traffic Period">
+		<groupExpression><![CDATA[$F{TRAFFIC_PERIOD}]]></groupExpression>
+		<groupHeader>
+			<band height="16" splitType="Stretch">
+				<staticText>
+					<reportElement x="10" y="2" width="120" height="12" uuid="795a00dd-0d22-4947-86d3-51c0f621e2dd"/>
+					<textElement verticalAlignment="Middle">
+						<font fontName="Calibri" size="8" isBold="true"/>
+					</textElement>
+					<text><![CDATA[Traffic Period:]]></text>
+				</staticText>
+				<textField isBlankWhenNull="true">
+					<reportElement x="130" y="2" width="250" height="12" uuid="ebc7c0b7-c4d1-4cda-93bc-f34a945f4610"/>
+					<textElement textAlignment="Left" verticalAlignment="Middle">
+						<font fontName="Calibri" size="8" isBold="true"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$F{TRAFFIC_PERIOD}]]></textFieldExpression>
+				</textField>
+			</band>
+		</groupHeader>
+	</group>
+	<group name="Product Group">
+		<groupExpression><![CDATA[$F{TRAFFIC_PERIOD}+$F{PRODUCT_GROUP}+$F{SERVICE_NAME}]]></groupExpression>
+		<groupFooter>
+			<band height="14" splitType="Stretch">
+				<staticText>
+					<reportElement x="10" y="1" width="120" height="12" uuid="6817944c-9129-40c3-b255-6aebe73a9053"/>
+					<textElement verticalAlignment="Middle">
+						<font fontName="Calibri" size="8" isBold="true"/>
+					</textElement>
+					<text><![CDATA[Subtotal:]]></text>
+				</staticText>
+				<textField pattern="#,##0;-#,##0" isBlankWhenNull="true">
+					<reportElement x="315" y="1" width="40" height="12" uuid="b13d373e-e3e1-4681-a3e2-f718fdca49bf"/>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font fontName="Calibri" size="8"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$V{DETAIL_CALL_COUNT}]]></textFieldExpression>
+				</textField>
+				<textField pattern="#,##0.00;-#,##0.00" isBlankWhenNull="true">
+					<reportElement x="495" y="1" width="55" height="12" uuid="3e1fbf5d-932a-4787-96e0-ef09486710b6"/>
+					<textElement textAlignment="Right" verticalAlignment="Middle">
+						<font fontName="Calibri" size="8"/>
+					</textElement>
+					<textFieldExpression><![CDATA[$V{DETAIL_NET_AMOUNT}]]></textFieldExpression>
+				</textField>
+			</band>
+		</groupFooter>
+	</group>
+	<pageHeader>
+		<band height="20" splitType="Stretch">
+			<image scaleImage="RetainShape" hAlign="Left">
+				<reportElement x="10" y="0" width="90" height="16" uuid="e4f5a6b7-2c3d-4e5f-8a9b-0c1d2e3f4a5b"/>
+				<imageExpression><![CDATA[$P{P_LOGO}]]></imageExpression>
+			</image>
+		</band>
+	</pageHeader>
+	<columnHeader>
+		<band height="16" splitType="Stretch">
+			<staticText>
+				<reportElement x="10" y="2" width="140" height="12" uuid="a4934ede-afe0-4163-90da-80af9f89e7c2"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Calibri" size="8" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Product Description]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="315" y="2" width="40" height="12" uuid="97d204c4-146a-4351-80d4-ceacd1b6e58c"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Calibri" size="8" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Count]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="495" y="2" width="55" height="12" uuid="8599f30b-335b-40e8-84ec-1c1f21e3b9b3"/>
+				<textElement verticalAlignment="Middle">
+					<font fontName="Calibri" size="8" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Amount]]></text>
+			</staticText>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="14" splitType="Stretch">
+			<textField isBlankWhenNull="true">
+				<reportElement x="10" y="1" width="300" height="12" uuid="9d0592f5-e186-4eb4-b940-8a75dee0b1a7" style="Alternate Row Colour"/>
+				<textElement textAlignment="Left" verticalAlignment="Middle">
+					<font fontName="Calibri" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SERVICE_NAME}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0;-#,##0" isBlankWhenNull="true">
+				<reportElement x="315" y="1" width="40" height="12" uuid="cc43e345-0ca4-46e2-afb9-a81d6fac2d5a" style="Alternate Row Colour"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="Calibri" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CALL_COUNT}]]></textFieldExpression>
+			</textField>
+			<textField pattern="#,##0.00;-#,##0.00" isBlankWhenNull="true">
+				<reportElement x="495" y="1" width="55" height="12" uuid="9f1f5d0e-c593-40f6-85d2-6f0870aa8292" style="Alternate Row Colour"/>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font fontName="Calibri" size="8"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{NET_AMOUNT}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+</jasperReport>

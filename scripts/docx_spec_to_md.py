@@ -17,6 +17,7 @@ import argparse
 import re
 import sys
 import time
+import zipfile
 from pathlib import Path
 from typing import Iterator, Union
 
@@ -59,6 +60,16 @@ GENERATED_FOOTER = re.compile(
 )
 
 
+def _count_docx_images(docx_path: Path) -> int:
+    """Embedded images (logos/branding) are not rendered to Markdown; count them
+    so the requirement stays visible to agents and pipelines."""
+    try:
+        with zipfile.ZipFile(docx_path) as z:
+            return sum(1 for n in z.namelist() if n.startswith("word/media/"))
+    except (zipfile.BadZipFile, OSError):
+        return 0
+
+
 def _iter_body_blocks(parent: DocumentObject) -> Iterator[Union[Paragraph, Table]]:
     """Yield paragraphs and tables in document order."""
     body = parent.element.body
@@ -75,26 +86,64 @@ def _escape_md_cell(text: str) -> str:
     return text
 
 
+def _run_is_mono(run) -> bool:
+    font_name = run.font.name.lower() if (run.font and run.font.name) else ""
+    return font_name in MONO_FONTS
+
+
 def _runs_to_md(paragraph: Paragraph) -> str:
-    parts: list[str] = []
+    # Coalesce consecutive runs that share the same formatting so adjacent
+    # bold/italic/mono runs do not emit broken markers like **a****b**.
+    segments: list[list] = []  # [is_bold, is_italic, is_mono, text]
     for run in paragraph.runs:
         text = run.text
         if not text:
             continue
-        font_name = ""
-        if run.font and run.font.name:
-            font_name = run.font.name.lower()
-        is_mono = font_name in MONO_FONTS
-        if run.bold and run.italic:
-            text = f"***{text}***"
-        elif run.bold:
-            text = f"**{text}**"
-        elif run.italic:
-            text = f"*{text}*"
-        if is_mono:
-            text = f"`{text}`"
-        parts.append(text)
+        is_bold = bool(run.bold)
+        is_italic = bool(run.italic)
+        is_mono = _run_is_mono(run)
+        if segments and segments[-1][:3] == [is_bold, is_italic, is_mono]:
+            segments[-1][3] += text
+        else:
+            segments.append([is_bold, is_italic, is_mono, text])
+
+    parts: list[str] = []
+    for is_bold, is_italic, is_mono, text in segments:
+        # Keep leading/trailing whitespace outside the markers so emphasis
+        # markers always hug the visible text (Markdown requires this).
+        leading = text[: len(text) - len(text.lstrip())]
+        trailing = text[len(text.rstrip()) :]
+        core = text.strip()
+        if core:
+            if is_bold and is_italic:
+                core = f"***{core}***"
+            elif is_bold:
+                core = f"**{core}**"
+            elif is_italic:
+                core = f"*{core}*"
+            if is_mono:
+                core = f"`{core}`"
+        parts.append(f"{leading}{core}{trailing}")
     return "".join(parts).strip()
+
+
+def _paragraph_is_mono(paragraph: Paragraph) -> bool:
+    """True when every non-blank run in the paragraph uses a monospace font."""
+    has_text = False
+    for run in paragraph.runs:
+        if not run.text or not run.text.strip():
+            continue
+        has_text = True
+        if not _run_is_mono(run):
+            return False
+    return has_text
+
+
+SQL_START_RE = re.compile(r"^\s*(SELECT|WITH)\b", re.I)
+MERMAID_RE = re.compile(
+    r"\b(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram"
+    r"|erDiagram|gantt|journey|pie|mindmap)\b"
+)
 
 
 def _heading_level(paragraph: Paragraph) -> int | None:
@@ -155,12 +204,51 @@ def convert(docx_path: Path, md_path: Path, *, front_matter: bool = True) -> Non
             f"Regenerate: `.venv\\Scripts\\python.exe scripts/docx_spec_to_md.py {rel_docx.as_posix()}`"
         )
         out.append("")
+        image_count = _count_docx_images(docx_path)
+        if image_count:
+            out.append(
+                f"> **Note:** the source `.docx` contains {image_count} embedded image(s) "
+                f"(logo / branding / layout mockups) that are not rendered in Markdown. "
+                f"Add the branding logo from the house-style convention "
+                f"(`P_LOGO`; default asset `sample_template/CSGI.jpg`)."
+            )
+            out.append("")
 
     prev_was_heading = False
     in_list = False
+    code_buf: list[str] = []  # consecutive monospace paragraphs (e.g. mermaid)
+    sql_buf: list[str] = []   # consecutive paragraphs forming a SQL statement
+    in_sql = False
+
+    def flush_code() -> None:
+        nonlocal code_buf
+        if not code_buf:
+            return
+        lang = "mermaid" if any(MERMAID_RE.search(line) for line in code_buf) else ""
+        if out and out[-1] != "":
+            out.append("")
+        out.append(f"```{lang}")
+        out.extend(code_buf)
+        out.append("```")
+        out.append("")
+        code_buf = []
+
+    def flush_sql() -> None:
+        nonlocal sql_buf, in_sql
+        if sql_buf:
+            if out and out[-1] != "":
+                out.append("")
+            out.append("```sql")
+            out.extend(sql_buf)
+            out.append("```")
+            out.append("")
+        sql_buf = []
+        in_sql = False
 
     for block in _iter_body_blocks(doc):
         if isinstance(block, Table):
+            flush_code()
+            flush_sql()
             if in_list:
                 in_list = False
             table_lines = _table_to_md(block)
@@ -174,6 +262,11 @@ def convert(docx_path: Path, md_path: Path, *, front_matter: bool = True) -> Non
         para: Paragraph = block
         text_plain = para.text.strip()
         if not text_plain:
+            # Blank line: stays inside an active SQL block, otherwise ends a
+            # code block and adds spacing.
+            if in_sql:
+                continue
+            flush_code()
             if in_list:
                 in_list = False
             if out and out[-1] != "":
@@ -188,6 +281,8 @@ def convert(docx_path: Path, md_path: Path, *, front_matter: bool = True) -> Non
 
         level = _heading_level(para)
         if level is not None:
+            flush_code()
+            flush_sql()
             if in_list:
                 in_list = False
             prefix = "#" * (level + 1)
@@ -200,14 +295,36 @@ def convert(docx_path: Path, md_path: Path, *, front_matter: bool = True) -> Non
 
         prev_was_heading = False
 
+        # Monospace paragraph (mermaid, ASCII art, code) -> fenced block.
+        if _paragraph_is_mono(para):
+            flush_sql()
+            for raw_line in para.text.split("\n"):
+                code_buf.append(raw_line.rstrip())
+            continue
+
+        # Any non-mono content ends a code block.
+        flush_code()
+
         if style_name == "Intense Quote" or style_name == "Quote":
+            flush_sql()
             out.append(f"> {md_text}")
             out.append("")
             continue
 
         if _is_list_item(para):
+            flush_sql()
             out.append(f"- {md_text}")
             in_list = True
+            continue
+
+        # SQL statement: starts at SELECT/WITH and runs until the next
+        # structural element (heading, table, list item) flushes it.
+        if in_sql:
+            sql_buf.append(text_plain)
+            continue
+        if SQL_START_RE.match(text_plain):
+            in_sql = True
+            sql_buf.append(text_plain)
             continue
 
         if in_list:
@@ -222,6 +339,9 @@ def convert(docx_path: Path, md_path: Path, *, front_matter: bool = True) -> Non
 
         out.append(md_text)
         out.append("")
+
+    flush_code()
+    flush_sql()
 
     # Normalize: collapse 3+ blank lines to 2, strip trailing blanks
     normalized: list[str] = []

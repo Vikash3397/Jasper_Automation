@@ -13,7 +13,7 @@ These rules apply when creating or editing **JasperReports** templates (`.jrxml`
 | Concern | Authoritative source |
 |--------|----------------------|
 | **Layout** — sections, labels, band set, group structure, field placement, page flow, subreport split (cover vs detail, etc.) | **Functional specification** (`functional_spec/*.md`; default `Invoice_Functional_Template.md`. Regenerate from `.docx` via `scripts/docx_spec_to_md.py` when Word is edited.) |
-| **Technical house style** — parameter names (`P_` prefix), field `SNAKE_CASE`, variable names, `<style>` definitions, number/date patterns, types, query parameterization, resource path parameters | **Sample templates** (`sample_template/`) — **reference only** |
+| **Technical house style** — parameter names (`P_` prefix), field `SNAKE_CASE`, variable names, `<style>` definitions, number/date patterns, types, query parameterization, resource path parameters | **Sample templates** (`sample_template/sample_invoice_main.jrxml`, `sample_template/sample_invoice_detail.jrxml`) — **reference only** |
 
 Do **not** copy band positions, group lists, or section content from sample templates when they differ from the functional spec. Samples are not layout blueprints.
 
@@ -53,10 +53,10 @@ Do **not** copy band positions, group lists, or section content from sample temp
 
 ## 4. Naming and data contract (from samples; layout from spec)
 
-- **Parameters:** use the `P_` prefix and names from sample templates where applicable (e.g. `P_TRANS_ID`, `P_SIGNATURE`, `TEMPLATE_FILE_DIRECTORY`, `REPORT_CONNECTION`). Add spec-only parameters with the same `P_` convention.
+- **Parameters:** use the `P_` prefix and names from sample templates where applicable (e.g. `P_TRANS_ID`, `P_SIGNATURE`, `TEMPLATE_FILE_DIRECTORY`, `P_LOGO`, `REPORT_CONNECTION`). Add spec-only parameters with the same `P_` convention. Pass shared parameters (e.g. `P_TRANS_ID`, `P_LOGO`) from the main report to subreports via `<subreportParameter>`.
 - **Fields:** `SNAKE_CASE` matching the sample query/view columns (e.g. `DOCUMENT_TYPE`, `FRN_NAME`, `NET_AMOUNT`).
 - **Variables:** reuse sample variable **names and reset patterns** when the same aggregation applies; create new variables only when the spec requires a total or flag not covered by samples.
-- **Styles:** reuse sample `<style>` elements (e.g. `Alternate Row Colour`) and the same font/pattern conventions (`Calibri`, `#,##0.00;-#,##0.00`, `dd-MMM-yyyy`) unless the spec mandates otherwise.
+- **Styles:** reuse sample `<style>` elements (e.g. `Alternate Row Colour`) and the same font/pattern conventions (`Calibri`, `#,##0.00;-#,##0.00`, `dd-MMM-yyyy`) **unless the spec mandates otherwise**. Resolve spec formatting from the active `.md` via `scripts/parse_spec_formatting.py` (General Instructions) before authoring; spec wins over sample defaults.
 - Document **required parameters** in comments at the top of the JRXML.
 - Align **types** with the data source (e.g. `java.math.BigDecimal` for money fields; `java.lang.Double` for sum variables per samples).
 
@@ -66,6 +66,16 @@ Do **not** copy band positions, group lists, or section content from sample temp
 
 - Reference images/fonts with **parameterized or relative paths** consistent with deployment (e.g. classpath resource vs. filesystem).
 - Reuse **styles** (`style` elements) for fonts, borders, and padding instead of duplicating properties on every element when possible.
+- **Branding logo:** when the spec/requirement includes a logo, place it in the header band(s) using the `P_LOGO` parameter (full image path; default asset `sample_template/CSGI.jpg`). Per the requirement mockups, the cover page shows the logo **top-right** and the detail page shows it **top-left**. Use:
+
+```xml
+<image scaleImage="RetainShape" hAlign="Right">
+  <reportElement x="465" y="0" width="80" height="40" uuid="..."/>
+  <imageExpression><![CDATA[$P{P_LOGO}]]></imageExpression>
+</image>
+```
+
+  Layout attributes go on `<reportElement>` only — never on `<image>` (`scaleImage`, `hAlign`, `vAlign`, `isUsingCache` are valid `<image>` attributes). The image requirement is not visible in the `.md` (the converter drops images), so add the logo from this house-style convention and the requirement mockups.
 
 ---
 

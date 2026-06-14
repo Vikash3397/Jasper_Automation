@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Generate JasperReports .jrxml files from a functional spec (.md).
+"""Emit the frozen National Invoice Usage reference templates.
 
-Output file names are derived from the spec via parse_spec_outputs — not hardcoded.
+NOTE: This is NOT a spec-driven generator. The layout (SQL, fields, bands,
+groups, column positions) is hardcoded for the National Invoice Usage template;
+only the OUTPUT FILE NAMES are derived from the spec via parse_spec_outputs.
+It exists as a deterministic reference example. For any new or edited spec,
+use the agent pipeline instead (`/generate-jasper-template`, which runs
+jasper-spec-architect then jasper-report-author) so the layout tracks the spec.
 
 Usage:
-  .venv\\Scripts\\python.exe scripts/gen_national_invoice.py
-  .venv\\Scripts\\python.exe scripts/gen_national_invoice.py functional_spec/Invoice_Functional_Template.md
+  .venv\\Scripts\\python.exe scripts/gen_reference_sample.py
+  .venv\\Scripts\\python.exe scripts/gen_reference_sample.py functional_spec/Invoice_Functional_Template.md
 """
 from __future__ import annotations
 
@@ -39,11 +44,12 @@ def main_header(spec_path: Path) -> str:
     return f"""<!--
   Cover page (main report)
   Spec: {spec_path.as_posix()}
-  Required parameters: P_TRANS_ID, P_SIGNATURE, TEMPLATE_FILE_DIRECTORY, P_CONTACT_USER
+  Required parameters: P_TRANS_ID, P_SIGNATURE, TEMPLATE_FILE_DIRECTORY, P_CONTACT_USER, P_LOGO
+  P_LOGO: full path to the branding logo image (default asset: sample_template/CSGI.jpg)
   Engine-provided (do not declare): REPORT_CONNECTION, REPORT_LOCALE, etc.
   Spec-only query fields (confirm in VW_DOCUMENT_TRANS_SUMMARY): FRN_TAX_REG_NO, OPR_TAX_REG_NO, OPR_CONTACT_NO, FRN_BANK_ACCOUNT_NAME
   Conflicts: Document labels Tax Invoice/Outbound Statement (spec) vs INVOICE/STATEMENT (sample).
-  Voice sample templates referenced in project docs are absent; house style from standard_template.jrxml only.
+  House style from sample_template/sample_invoice_main.jrxml and sample_invoice_detail.jrxml.
 -->
 """
 
@@ -52,7 +58,8 @@ def detail_header(spec_path: Path) -> str:
     return f"""<!--
   Detail page (subreport)
   Spec: {spec_path.as_posix()}
-  Required parameters: P_TRANS_ID
+  Required parameters: P_TRANS_ID, P_LOGO
+  P_LOGO: full path to the branding logo image, passed from the main report (default asset: sample_template/CSGI.jpg)
   Engine-provided: REPORT_CONNECTION via connectionExpression only
   Spec-only query fields (confirm in VW_DOCUMENT_TRANS_DETAIL): RATING_COMPONENT, ORIGINATION, DESTINATION, RATE_UNIT, RATE, PRODUCT_GROUP
   Origination column TBD per spec - displays static TBD placeholder.
@@ -125,6 +132,17 @@ def st(x, y, w, h, text, bold=False, u=None, style=None):
 \t\t\t</staticText>"""
 
 
+def img(x, y, w, h, expr, h_align="Left", u=None):
+    # Branding logo. Layout attrs live on <reportElement> only (never on <image>);
+    # scaleImage/hAlign are valid <image> attributes per the iReport 5.6.0 schema.
+    u = u or uid()
+    re_elem = report_element(x, y, w, h, u)
+    return f"""\t\t\t<image scaleImage="RetainShape" hAlign="{h_align}">
+{re_elem}
+\t\t\t\t<imageExpression><![CDATA[{expr}]]></imageExpression>
+\t\t\t</image>"""
+
+
 def styles_block():
     return """\t<style name="Title" isDefault="false" fontName="Calibri" fontSize="10" isBold="true"/>
 \t<style name="Label" isDefault="false" fontName="Calibri" fontSize="8" isBold="true"/>
@@ -153,6 +171,7 @@ def gen_main(main_name: str, detail_name: str, spec_path: Path):
         '\t<parameter name="P_SIGNATURE" class="java.lang.String"/>',
         '\t<parameter name="TEMPLATE_FILE_DIRECTORY" class="java.lang.String"/>',
         '\t<parameter name="P_CONTACT_USER" class="java.lang.String"/>',
+        '\t<parameter name="P_LOGO" class="java.lang.String"/>',
         '\t<queryString><![CDATA[SELECT',
         'TRANS.DOCUMENT_TYPE,',
         'TRANS.FRN_NAME,',
@@ -283,6 +302,8 @@ def gen_main(main_name: str, detail_name: str, spec_path: Path):
 
     # columnHeader H1+H2+H3 + D1 column labels
     ch_elems = []
+    # Branding logo top-right per requirement mockup (cover page).
+    ch_elems.append(img(465, 0, 80, 40, "$P{P_LOGO}", h_align="Right"))
     ch_elems.append(tf(0, 0, 555, 20, DOC_TYPE_EXPR, bold=True, align="Center"))
     ch_elems.append(st(10, 24, 120, 10, "Franchise Name:", bold=True))
     ch_elems.append(tf(130, 24, 400, 10, "$F{FRN_NAME}"))
@@ -371,6 +392,9 @@ def gen_main(main_name: str, detail_name: str, spec_path: Path):
         f'\t\t\t\t<subreportParameter name="P_TRANS_ID">\n'
         f'\t\t\t\t\t<subreportParameterExpression><![CDATA[$P{{P_TRANS_ID}}]]></subreportParameterExpression>\n'
         f'\t\t\t\t</subreportParameter>\n'
+        f'\t\t\t\t<subreportParameter name="P_LOGO">\n'
+        f'\t\t\t\t\t<subreportParameterExpression><![CDATA[$P{{P_LOGO}}]]></subreportParameterExpression>\n'
+        f'\t\t\t\t</subreportParameter>\n'
         f'\t\t\t\t<connectionExpression><![CDATA[$P{{REPORT_CONNECTION}}]]></connectionExpression>\n'
         f'\t\t\t\t<subreportExpression><![CDATA[$P{{TEMPLATE_FILE_DIRECTORY}} + "{detail_name}.jasper"]]></subreportExpression>\n'
         f'\t\t\t</subreport>'
@@ -392,6 +416,7 @@ def gen_detail(detail_name: str, spec_path: Path):
         '\t<import value="net.sf.jasperreports.engine.*"/>',
         styles_block(),
         '\t<parameter name="P_TRANS_ID" class="java.lang.String"/>',
+        '\t<parameter name="P_LOGO" class="java.lang.String"/>',
         '\t<queryString><![CDATA[SELECT',
         'TRANS.TRAFFIC_PERIOD,',
         'TRANS.SERVICE_NAME,',
@@ -487,7 +512,10 @@ def gen_detail(detail_name: str, spec_path: Path):
         parts.append("\t</group>")
 
     ph = []
-    ph.append(tf(0, 0, 555, 16, "$F{FRN_NAME}", bold=True, align="Center"))
+    # Branding logo top-left per requirement mockup (detail page); franchise name
+    # shifts right of the logo and left-aligns to match the layout.
+    ph.append(img(10, 0, 90, 16, "$P{P_LOGO}", h_align="Left"))
+    ph.append(tf(110, 0, 440, 16, "$F{FRN_NAME}", bold=True, align="Left"))
     ph.append(st(10, 18, 140, 10, "Tax Registration Number:", bold=True))
     ph.append(tf(150, 18, 380, 10, "$F{FRN_TAX_REG_NO}", eval_time="Report"))
     ph.append(st(10, 32, 50, 10, "Bill To:", bold=True))

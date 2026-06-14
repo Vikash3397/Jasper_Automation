@@ -24,6 +24,18 @@ def _strip_md_inline(text: str) -> str:
     return text.strip()
 
 
+def _derive_title(text: str, md_path: Path) -> str:
+    """Title from the spec content (never hardcoded), falling back to filename."""
+    m = re.search(r"\*\*([^*]+Template)\*\*", text, re.I)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"^#\s+(.+?)\s*$", text, re.M)
+    if m:
+        return _strip_md_inline(m.group(1))
+    stem = re.sub(r"[_-]+", " ", md_path.stem).strip()
+    return stem.title() or "Functional Specification"
+
+
 def _add_formatted_run(paragraph, text: str) -> None:
     """Add text with **bold** and `code` spans."""
     parts = re.split(r"(\*\*[^*]+\*\*|`[^`]+`)", text)
@@ -100,10 +112,10 @@ def convert(md_path: Path, out_path: Path) -> None:
     section.left_margin = Inches(1)
     section.right_margin = Inches(1)
 
-    # Title block
+    # Title block (derived from the spec, never hardcoded)
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    tr = title.add_run("National Invoice Usage Template")
+    tr = title.add_run(_derive_title(text, md_path))
     tr.bold = True
     tr.font.size = Pt(18)
     tr.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
@@ -233,8 +245,7 @@ def convert(md_path: Path, out_path: Path) -> None:
     fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
     fn = fp.add_run(
         f"Generated from {md_path.name}. "
-        "Machine-readable source: same folder, .md file. "
-        "Spec version 1.0."
+        "Machine-readable source: same folder, .md file."
     )
     fn.font.size = Pt(9)
     fn.italic = True

@@ -10,8 +10,8 @@ You are a JasperReports template authoring specialist for this project. Your job
 ## Authoritative inputs (read in this order)
 
 1. **`.cursor/rules/jasper-rules.md`** — binding conventions.
-2. **Functional specification** (`functional_spec/*.md`) — **authoritative for layout**: sections (H1, H2, D1, F1…), labels, band set, groups, subreport split, column set, page flow, data sources, business rules, and output file names. Read the full `.md` file. Default: `functional_spec/Invoice_Functional_Template.md`. If only a `.docx` exists, run `docx_spec_to_md.py` first — do not read binary Word files or raw zip/XML.
-3. **Sample templates** (`sample_template/standard_template_voice.jrxml`, `sample_template/standard_voice_detail_page.jrxml`) — **reference only for technical house style**. Copy:
+2. **Functional specification** (`functional_spec/*.md`) — **authoritative for layout**: sections (H1, H2, D1, F1…), labels, band set, groups, subreport split, column set, page flow, data sources, business rules, and output file names. Read the full `.md` file. Default: `functional_spec/Invoice_Functional_Template.md`. The `jasper-spec-converter` agent normally produces this `.md` first; if only a `.docx` exists, run `scripts/docx_spec_to_md.py` (or the converter agent) — do not read binary Word files or raw zip/XML.
+3. **Sample templates** (`sample_template/sample_invoice_main.jrxml`, `sample_template/sample_invoice_detail.jrxml`) — **reference only for technical house style**. Copy:
    - Root `jasperReport` namespace / schema / `language="groovy"`
    - **Parameters** (`P_` prefix, `P_TRANS_ID`, `TEMPLATE_FILE_DIRECTORY`, `REPORT_CONNECTION`, etc.)
    - **Field** names (`SNAKE_CASE` from the same views)
@@ -30,6 +30,7 @@ You are a JasperReports template authoring specialist for this project. Your job
 
 - Produce **well-formed XML** compatible with iReport 5.6.0 (no JR 6+ only elements).
 - Layout attributes (`x`, `y`, `width`, `height`, `uuid`, `style`, `printWhenExpression`, etc.) on `<reportElement>` only — never on `<textField>` / `<staticText>` / `<image>`.
+- **Branding logo:** when the requirement includes a logo (note: images are dropped from the `.md`, so rely on the requirement mockups and house style), declare a `P_LOGO` parameter and place the logo in the header band(s) via `<image scaleImage="RetainShape">` with `<imageExpression><![CDATA[$P{P_LOGO}]]></imageExpression>`. Cover page = top-right, detail page = top-left (per the requirement mockups). Pass `P_LOGO` from the main report to the detail subreport via `<subreportParameter>`. Default asset: `sample_template/CSGI.jpg`.
 - Every `uuid` must be valid `8-4-4-4-12` hex UUIDs.
 - **Bands and groups are dynamic** — derived from the functional spec (rules §2–§3).
 - **All subreports** in the main report’s **summary** band only.
