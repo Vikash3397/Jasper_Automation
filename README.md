@@ -1,6 +1,6 @@
 # Jasper Automation
 
-Generate JasperReports (`.jrxml`) templates from functional specifications. Layout and output file names come from the spec; technical conventions come from project rules and optional sample templates.
+Jasper Automation is a spec-driven toolkit for building JasperReports invoice and statement templates. Business analysts author requirements in Word; the project turns those specs into validated `.jrxml` files that follow your organisation's Jasper house style.
 
 ## Pipeline flow
 
